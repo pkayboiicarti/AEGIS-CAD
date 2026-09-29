@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS Citizen Emergency SOS Portal // State Disaster Management</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --bg-base: #060913;
+            --bg-card: rgba(15, 23, 42, 0.85);
+            --border-color: rgba(255, 255, 255, 0.12);
+            --primary: #ef4444;
+            --primary-hover: #dc2626;
+            --accent: #3b82f6;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(239, 68, 68, 0.15) 0%, transparent 60%),
+                radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px 16px 40px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .sos-container {
+            width: 100%;
+            max-width: 680px;
+            margin: 0 auto;
+        }
+
+        .header-banner {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .sos-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #f87171;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+            color: #fff;
+        }
+
+        .header-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 22px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .required-star {
+            color: #ef4444;
+        }
+
+        textarea, input, select {
+            width: 100%;
+            background: rgba(10, 15, 29, 0.8);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        textarea:focus, input:focus, select:focus {
+            outline: none;
+            border-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+        }
+
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        @media (max-width: 500px) {
+            .category-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .cat-btn {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 10px 8px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .cat-btn.active {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: #ef4444;
+            color: #fff;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+
+        /* Preset Landmark Chips */
+        .preset-chips-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .preset-chip {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .preset-chip:hover {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: #3b82f6;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        /* Autocomplete Suggestions Box */
+        .suggestions-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #0f172a;
+            border: 1px solid #3b82f6;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            max-height: 220px;
+            overflow-y: auto;
+            display: none;
+            margin-top: 4px;
+        }
+
+        .suggestion-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            transition: background 0.15s ease;
+        }
+
+        .suggestion-item:hover {
+            background: rgba(59, 130, 246, 0.2);
+            color: #fff;
+        }
+
+        .suggestion-tag {
+            font-size: 0.68rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            font-weight: 700;
+        }
+
+        /* Leaflet Interactive Pin Map */
+        .pinpoint-map-wrap {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #090d16;
+            position: relative;
+        }
+
+        #sos-pinpoint-map {
+            width: 100%;
+            height: 220px;
+            z-index: 10;
+        }
+
+        .map-hint-banner {
+            padding: 8px 12px;
+            background: rgba(15, 23, 42, 0.9);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            font-family: var(--font-mono);
+        }
+
+        .pin-status-text {
+            color: #34d399;
+            font-weight: 700;
+        }
+
+        .gps-fallback-notice {
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            color: #fbbf24;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .gps-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .gps-status {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .gps-status.locked {
+            color: #34d399;
+            font-weight: 700;
+        }
+
+        .btn-gps {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            color: #60a5fa;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-gps:hover {
+            background: rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-submit-sos {
+            width: 100%;
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            border: none;
+            color: #fff;
+            padding: 16px;
+            border-radius: 10px;
+            font-size: 1.02rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .btn-submit-sos:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.6);
+        }
+
+        .btn-submit-sos:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .response-card {
+            display: none;
+            margin-top: 20px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .response-card.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hotline-strip {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .hotline-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 700;
+            color: #fca5a5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sos-container">
+        
+        <div class="header-banner">
+            <div class="sos-badge">
+                <i data-lucide="radio" style="width: 14px; height: 14px;"></i>
+                LIVE CAD DISPATCH INGESTION
+            </div>
+            <h1>State Emergency Operations Center (SEOC)</h1>
+            <p class="header-subtitle">Public Citizen Distress Signal & Multi-Agency Rescue Portal</p>
+        </div>
+
+        <div class="card">
+            <form id="public-sos-form">
+                
+                <!-- Category Selector -->
+                <div class="form-group">
+                    <label><i data-lucide="alert-triangle" style="width: 16px; color: #f59e0b;"></i> Select Emergency Type:</label>
+                    <div class="category-grid" id="cat-grid">
+                        <button type="button" class="cat-btn active" data-cat="FLOOD">🌊 Flood Rescue</button>
+                        <button type="button" class="cat-btn" data-cat="FIRE">🔥 Fire Outbreak</button>
+                        <button type="button" class="cat-btn" data-cat="INDUSTRIAL">⚠️ Hazmat / Gas</button>
+                        <button type="button" class="cat-btn" data-cat="STRUCTURAL_COLLAPSE">🏚️ Collapse</button>
+                        <button type="button" class="cat-btn" data-cat="MEDICAL">🚑 Medical Trauma</button>
+                        <button type="button" class="cat-btn" data-cat="CYCLONE">🌀 Cyclone / Storm</button>
+                    </div>
+                </div>
+
+                <!-- Distress Text -->
+                <div class="form-group">
+                    <label for="input-distress-msg">
+                        <i data-lucide="message-square" style="width: 16px; color: #ef4444;"></i>
+                        Describe What Happened & Current Danger <span class="required-star">*</span>
+                    </label>
+                    <textarea id="input-distress-msg" rows="3" required placeholder="Describe trapped people, water depth, smoke/flames, injuries, exact building or floor... (e.g. 4 students trapped in chemical lab with smoke spreading at SNUC campus)"></textarea>
+                </div>
+
+                <!-- Landmark & College Auto-Suggest Input -->
+                <div class="form-group">
+                    <label for="input-landmark">
+                        <i data-lucide="map-pin" style="width: 16px; color: #3b82f6;"></i>
+                        Landmark / College / Area Name (Instant Lookup):
+                    </label>
+                    <div style="position: relative;">
+                        <input type="text" id="input-landmark" autocomplete="off" placeholder="Type college or landmark (e.g. SNUC, SSN, IIT Madras, Velachery, Kilambakkam...)" />
+                        <div id="suggestions-box" class="suggestions-dropdown"></div>
+                    </div>
+
+                    <!-- Quick Preset Landmark Chips -->
+                    <div class="preset-chips-wrap">
+                        <span style="font-size: 0.72rem; color: var(--text-muted); align-self: center;">Quick Picks:</span>
+                        <button type="button" class="preset-chip" data-name="Shiv Nadar University Chennai (SNUC)" data-lat="12.7533" data-lng="80.1970">🎓 SNUC / SSN (OMR)</button>
+                        <button type="button" class="preset-chip" data-name="IIT Madras Campus" data-lat="12.9915" data-lng="80.2337">🏛️ IIT Madras</button>
+                        <button type="button" class="preset-chip" data-name="Anna University Guindy" data-lat="13.0102" data-lng="80.2354">🎓 Anna University</button>
+                        <button type="button" class="preset-chip" data-name="Velachery Lake Environs" data-lat="12.9791" data-lng="80.2185">🌊 Velachery</button>
+                        <button type="button" class="preset-chip" data-name="Kilambakkam Bus Terminus (KCBT)" data-lat="12.8630" data-lng="80.0760">🚉 Kilambakkam KCBT</button>
+                        <button type="button" class="preset-chip" data-name="Siruseri SIPCOT IT Park" data-lat="12.8330" data-lng="80.2180">🏢 Siruseri SIPCOT</button>
+                        <button type="button" class="preset-chip" data-name="Coimbatore Gandhipuram" data-lat="11.0183" data-lng="76.9644">📍 Coimbatore</button>
+                        <button type="button" class="preset-chip" data-name="Madurai Meenakshi Environs" data-lat="9.9195" data-lng="78.1193">📍 Madurai</button>
+                    </div>
+                </div>
+
+                <!-- Interactive Leaflet Pinpoint Map -->
+                <div class="form-group">
+                    <label><i data-lucide="crosshair" style="width: 16px; color: #10b981;"></i> Pinpoint Rescue Target Location on Map:</label>
+                    
+                    <div class="pinpoint-map-wrap">
+                        <div id="sos-pinpoint-map"></div>
+                        <div class="map-hint-banner">
+                            <span>👆 <strong style="color: #fff;">Click or Drag Pin</strong> on map to adjust exact spot</span>
+                            <span id="pin-coords-text" class="pin-status-text">📍 Pin: 13.0827, 80.2707</span>
+                        </div>
+                    </div>
+
+                    <!-- GPS Auto-Acquire & Fallback Bar -->
+                    <div class="gps-box" style="margin-top: 8px;">
+                        <div id="gps-status-text" class="gps-status">
+                            📍 GPS coordinates set via pin. Auto-locate:
+                        </div>
+                        <button type="button" id="btn-get-gps" class="btn-gps">
+                            <i data-lucide="navigation" style="width: 14px; height: 14px;"></i> Use Device GPS
+                        </button>
+                    </div>
+
+                    <div id="insecure-http-notice" class="gps-fallback-notice" style="display: none;">
+                        <i data-lucide="info" style="width: 16px; min-width: 16px;"></i>
+                        <span>Browser GPS is restricted on LAN HTTP (<code>http://10.x.x.x</code>). Simply <strong>click/tap the interactive map above</strong> to set your exact location!</span>
+                    </div>
+                </div>
+
+                <!-- Contact Phone -->
+                <div class="form-group">
+                    <label for="input-contact">
+                        <i data-lucide="phone" style="width: 16px; color: #a855f7;"></i>
+                        Callback Contact Phone / Citizen Name (Optional)
+                    </label>
+                    <input type="tel" id="input-contact" placeholder="e.g. +91 98400 12345 / Rajesh K." />
+                </div>
+
+                <!-- Transmit Button -->
+                <button type="submit" id="btn-submit" class="btn-submit-sos">
+                    <i data-lucide="send" style="width: 20px; height: 20px;"></i>
+                    TRANSMIT DISTRESS SIGNAL TO CAD COMMAND
+                </button>
+
+            </form>
+
+            <!-- Success / Confirmation Card -->
+            <div id="response-card" class="response-card">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                    <i data-lucide="check-circle" style="color: #10b981; width: 24px; height: 24px;"></i>
+                    <h3 id="resp-status-title" style="font-size: 1.15rem; font-weight: 800; color: #10b981;">
+                        DISTRESS SIGNAL INGESTED INTO CAD
+                    </h3>
+                </div>
+                <p id="resp-incident-msg" style="font-size: 0.88rem; color: var(--text-primary); margin-bottom: 12px;">
+                    Your emergency alert has been ingested and prioritized on the SEOC Command Matrix.
+                </p>
+                <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 0.82rem; margin-bottom: 16px; text-align: left;">
+                    <div><strong>Incident Reference:</strong> <span id="resp-ref-id" style="color: #60a5fa;">INC-PENDING</span></div>
+                    <div><strong>Assigned Urgency:</strong> <span id="resp-urgency" style="color: #ef4444;">92 / 100</span></div>
+                    <div><strong>Status:</strong> <span id="resp-status" style="color: #fbbf24;">QUEUED FOR DISPATCH</span></div>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                    ⚠️ Stay in a safe, elevated location. Emergency response units are mobilizing.
+                </div>
+                <div style="margin-top: 16px;">
+                    <a href="/" style="color: #60a5fa; font-size: 0.82rem; text-decoration: none; font-weight: 600;">
+                        ← View Command Room Console
+                    </a>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="hotline-strip">
+            <span>Direct Emergency Call Centers:</span>
+            <span class="hotline-item">📞 112 (National Disaster)</span>
+            <span class="hotline-item">🚒 101 (Fire Command)</span>
+            <span class="hotline-item">🚑 108 (ALS Ambulance)</span>
+        </div>
+
+    </div>
+
+    <script>
+        let selectedCategory = "FLOOD";
+        let capturedLat = 13.0827;
+        let capturedLng = 80.2707;
+        let pinMarker = null;
+        let pinMap = null;
+
+        // Emergency Category Toggle
+        document.querySelectorAll(".cat-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                selectedCategory = btn.dataset.cat;
+            });
+        });
+
+        // Initialize Leaflet Pinpoint Map
+        function initPinpointMap() {
+            pinMap = L.map('sos-pinpoint-map', {
+                center: [capturedLat, capturedLng],
+                zoom: 11,
+                zoomControl: true
+            });
+
+            // Clean Dark Tile Layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 19
+            }).addTo(pinMap);
+
+            // Custom Glowing Distress Pin Icon
+            const sosPinIcon = L.divIcon({
+                className: 'custom-sos-pin',
+                html: `
+                    <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                        <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: rgba(239, 68, 68, 0.4); animation: pulse-glow 1.5s infinite;"></div>
+                        <div style="width: 24px; height: 24px; border-radius: 50%; background: #ef4444; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 900;">🚨</div>
+                    </div>
+                `,
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+            });
+
+            pinMarker = L.marker([capturedLat, capturedLng], {
+                draggable: true,
+                icon: sosPinIcon
+            }).addTo(pinMap);
+
+            pinMarker.on('dragend', function(e) {
+                const pos = e.target.getLatLng();
+                updateCoordinates(pos.lat, pos.lng);
+            });
+
+            pinMap.on('click', function(e) {
+                updateCoordinates(e.latlng.lat, e.latlng.lng);
+            });
+        }
+
+        function updateCoordinates(lat, lng, pan = false) {
+            capturedLat = parseFloat(lat.toFixed(5));
+            capturedLng = parseFloat(lng.toFixed(5));
+            
+            if (pinMarker) {
+                pinMarker.setLatLng([capturedLat, capturedLng]);
+            }
+            if (pan && pinMap) {
+                pinMap.flyTo([capturedLat, capturedLng], 14, { duration: 1.0 });
+            }
+
+            const coordsEl = document.getElementById("pin-coords-text");
+            if (coordsEl) {
+                coordsEl.innerText = `📍 Pin: ${capturedLat}, ${capturedLng}`;
+            }
+
+            const gpsStatus = document.getElementById("gps-status-text");
+            if (gpsStatus) {
+                gpsStatus.innerHTML = `✅ <strong>Target Set:</strong> ${capturedLat}, ${capturedLng}`;
+                gpsStatus.className = "gps-status locked";
+            }
+        }
+
+        // Initialize Map
+        document.addEventListener("DOMContentLoaded", () => {
+            initPinpointMap();
+
+            // Check if context is insecure (HTTP on non-localhost IP like 10.31.4.228)
+            if (window.isSecureContext === false && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+                const notice = document.getElementById("insecure-http-notice");
+                if (notice) notice.style.display = "flex";
+            }
+        });
+
+        // Quick Preset Chips Click Handler
+        document.querySelectorAll(".preset-chip").forEach(chip => {
+            chip.addEventListener("click", () => {
+                const name = chip.dataset.name;
+                const lat = parseFloat(chip.dataset.lat);
+                const lng = parseFloat(chip.dataset.lng);
+                
+                document.getElementById("input-landmark").value = name;
+                updateCoordinates(lat, lng, true);
+            });
+        });
+
+        // Live Landmark & College Autocomplete
+        const landmarkInput = document.getElementById("input-landmark");
+        const suggestionsBox = document.getElementById("suggestions-box");
+        let searchTimer = null;
+
+        landmarkInput.addEventListener("input", () => {
+            const query = landmarkInput.value.trim();
+            clearTimeout(searchTimer);
+
+            if (query.length < 2) {
+                suggestionsBox.style.display = "none";
+                return;
+            }
+
+            searchTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(query)}`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    const results = data.results || [];
+
+                    if (results.length === 0) {
+                        suggestionsBox.style.display = "none";
+                        return;
+                    }
+
+                    suggestionsBox.innerHTML = results.map(r => `
+                        <div class="suggestion-item" data-name="${r.name}" data-lat="${r.lat}" data-lng="${r.lng}">
+                            <div>
+                                <span style="font-weight: 700;">${r.name}</span>
+                            </div>
+                            <span class="suggestion-tag">${r.category}</span>
+                        </div>
+                    `).join("");
+
+                    suggestionsBox.style.display = "block";
+
+                    // Bind suggestion clicks
+                    suggestionsBox.querySelectorAll(".suggestion-item").forEach(item => {
+                        item.addEventListener("click", () => {
+                            const name = item.dataset.name;
+                            const lat = parseFloat(item.dataset.lat);
+                            const lng = parseFloat(item.dataset.lng);
+
+                            landmarkInput.value = name;
+                            suggestionsBox.style.display = "none";
+                            updateCoordinates(lat, lng, true);
+                        });
+                    });
+
+                } catch (e) {
+                    console.debug("Geocode search error:", e);
+                }
+            }, 250);
+        });
+
+        // Hide suggestions when clicking outside
+        document.addEventListener("click", (e) => {
+            if (!landmarkInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                suggestionsBox.style.display = "none";
+            }
+        });
+
+        // Device GPS Button Handler
+        const gpsBtn = document.getElementById("btn-get-gps");
+        const gpsStatus = document.getElementById("gps-status-text");
+
+        gpsBtn.addEventListener("click", () => {
+            if (!navigator.geolocation) {
+                gpsStatus.innerText = "❌ Geolocation not supported by this browser. Use map above.";
+                return;
+            }
+
+            gpsStatus.innerText = "⏳ Acquiring device GPS fix...";
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    updateCoordinates(lat, lng, true);
+                    gpsStatus.innerHTML = `✅ <strong>Device GPS Locked:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m)`;
+                    gpsStatus.className = "gps-status locked";
+                    gpsBtn.innerText = "GPS Synced";
+                },
+                (err) => {
+                    console.warn("GPS error:", err);
+                    if (window.isSecureContext === false) {
+                        gpsStatus.innerText = "⚠️ Browser blocked GPS on LAN HTTP. Please click on the map to pin location.";
+                    } else {
+                        gpsStatus.innerText = "⚠️ GPS permission denied. Please click on the map to set pin.";
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        });
+
+        // Form Submit Handler
+        const form = document.getElementById("public-sos-form");
+        const submitBtn = document.getElementById("btn-submit");
+        const responseCard = document.getElementById("response-card");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const rawMsg = document.getElementById("input-distress-msg").value.trim();
+            const landmark = document.getElementById("input-landmark").value.trim();
+            const contact = document.getElementById("input-contact").value.trim();
+
+            if (!rawMsg) return;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `⏳ INGESTING & TRIAGING LIVE DISTRESS...`;
+
+            try {
+                let fullMsg = rawMsg;
+                if (landmark && !rawMsg.toLowerCase().includes(landmark.toLowerCase())) {
+                    fullMsg += ` Landmark: ${landmark}.`;
+                }
+
+                const payload = {
+                    rawText: fullMsg,
+                    source: "CITIZEN_PUBLIC_SOS",
+                    lat: capturedLat,
+                    lng: capturedLng,
+                    landmark: landmark,
+                    senderContact: contact || "Citizen Walk-in / Web",
+                    category: selectedCategory
+                };
+
+                const res = await fetch("/api/ingest/live", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                
+                form.style.display = "none";
+                responseCard.classList.add("active");
+
+                if (data.status === "DISCARDED") {
+                    document.getElementById("resp-status-title").innerText = "SIGNAL REVIEWED / NON-EMERGENCY";
+                    document.getElementById("resp-status-title").style.color = "#f59e0b";
+                    document.getElementById("resp-incident-msg").innerText = data.reason || "This message was reviewed by CAD automated triage and marked non-critical.";
+                    document.getElementById("resp-ref-id").innerText = "FILTERED-OUT";
+                    document.getElementById("resp-urgency").innerText = "N/A";
+                    document.getElementById("resp-status").innerText = "DISCARDED";
+                } else {
+                    const inc = data.incident || {};
+                    document.getElementById("resp-ref-id").innerText = data.incidentId || inc.id || "INC-LIVE";
+                    document.getElementById("resp-urgency").innerText = `${inc.urgencyScore || inc.urgency_score || 85} / 100`;
+                    document.getElementById("resp-status").innerText = data.merged ? `MERGED WITH ACTIVE CLUSTER (SOS Count: ${inc.sosAlertsCount || 2})` : "QUEUED FOR IMMEDIATE DISPATCH";
+                }
+
+            } catch (err) {
+                console.error("SOS transmission error:", err);
+                alert("Failed to submit SOS. Please call emergency hotline 112 directly.");
+            } finally {
+                submitBtn.disabled = false;
+                lucide.createIcons();
+            }
+        });
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS CAD // AI Disaster Ingestion & Triage Command Center</title>
+
+    <!-- Google Fonts: Outfit & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet GIS Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Custom Tactical Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css?v=2.4.3">
+</head>
+
+<body>
+
+    <!-- Header & Telemetry Bar -->
+    <header class="cad-header">
+        <div class="brand-section">
+            <div class="brand-logo">
+                <i data-lucide="shield-alert" style="color: white; width: 20px; height: 20px;"></i>
+            </div>
+            <div>
+                <div class="brand-title">
+                    AEGIS-CAD <span class="header-live-badge">LIVE DISPATCH</span>
+                </div>
+                <div class="brand-subtitle">AI DISASTER INGESTION & TRIAGE COMMAND</div>
+            </div>
+        </div>
+        <div class="header-telemetry">
+            <button type="button" class="stream-hud-btn" id="btn-social-stream-hud" onclick="window.cadApp.toggleSocialStreamDrawer()" title="Click to view live incoming social distress feed">
+                <span class="stream-ping-wrap">
+                    <span class="stream-ping-ring"></span>
+                    <span id="ws-status-dot" class="stream-pulse-dot active"></span>
+                </span>
+                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: #cbd5e1; font-weight: 600;">STREAM:</span>
+                <strong id="stream-hud-status-text" style="font-family: var(--font-mono); font-size: 0.72rem; color: #34d399; font-weight: 800;">LIVE</strong>
+                <span class="stream-hud-count" id="stream-hud-count" title="Total Ingested Signals">0</span>
+            </button>
+            <div class="telemetry-item">
+                <i data-lucide="alert-triangle" style="width: 13px; color: #f87171;"></i>
+                <span>CRITICAL: <strong id="telemetry-critical-inc" style="color: #f87171;">0</strong></span>
+            </div>
+            <div class="telemetry-item">
+                <i data-lucide="users" style="width: 13px; color: #fb923c;"></i>
+                <span>TRAPPED: <strong id="telemetry-trapped" style="color: #fb923c;">0</strong></span>
+            </div>
+            <div class="telemetry-item">
+                <i data-lucide="truck" style="width: 13px; color: #60a5fa;"></i>
+                <span>UNITS: <strong id="telemetry-units-disp" style="color: #60a5fa;">0 / 7</strong></span>
+            </div>
+            <div class="telemetry-item">
+                <i data-lucide="clock" style="width: 13px; color: #94a3b8;"></i>
+                <span id="clock-display">00:00:00 UTC</span>
+            </div>
+        </div>
+
+        <!-- Role Switcher -->
+        <div class="role-switcher-wrap">
+            <div class="role-segmented-control">
+                <button id="role-btn-control" class="role-toggle-btn active" data-role="CONTROL_ROOM">
+                    <span>🏢 Control Room</span>
+                </button>
+                <button id="role-btn-responder" class="role-toggle-btn" data-role="FIELD_RESPONDER">
+                    <span>🚒 Field Responder</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button id="btn-safety-sweep" class="btn btn-sweep" title="Perform Safety Sweep Audit across active queue">
+                <i data-lucide="shield-check"></i> Sweep
+            </button>
+            <button id="btn-standby-export" class="btn btn-export" title="Controlled System Standby & Session Export">
+                <i data-lucide="download-cloud"></i> Export
+            </button>
+            <button id="btn-toggle-audio" class="btn btn-icon" title="Toggle Emergency Siren / Audio Tones">
+                <i data-lucide="volume-2"></i>
+            </button>
+            <a href="/report" target="_blank" id="btn-public-sos" class="btn btn-danger btn-sos" title="Open Public Citizen Emergency SOS Portal">
+                <i data-lucide="radio-tower"></i> Citizen SOS
+            </a>
+        </div>
+    </header>
+
+    <!-- Compact Alert Ticker (h-7) -->
+    <div class="alert-ticker">
+        <span class="ticker-badge">SEOC ALERT</span>
+        <marquee id="active-alert-ticker" scrollamount="6" behavior="scroll">
+            AEGIS DISASTER CAD ENGINE ACTIVE // MONITORING 8 OPERATIONAL TASKS ACROSS CHENNAI & TAMIL NADU DISTRICTS
+        </marquee>
+    </div>
+
+
+    <!-- Main Workspace -->
+    <div class="cad-workspace">
+        
+        <!-- Left Navigation Rail (RBAC Segregated) -->
+        <nav class="cad-nav-rail">
+            <!-- Control Room Tabs (CONTROL_ROOM Role) -->
+            <button class="nav-tab active nav-role-control" data-tab="tab-map" data-role-req="CONTROL_ROOM" title="Map Overview & Live HUD">
+                <i data-lucide="map"></i>
+                <span>MAP</span>
+            </button>
+            <button class="nav-tab nav-role-control" data-tab="tab-ingest" data-role-req="CONTROL_ROOM" title="AI Ingest Workbench & Signal Parser">
+                <i data-lucide="cpu"></i>
+                <span>AI INGEST</span>
+            </button>
+            <button class="nav-tab nav-role-control" data-tab="tab-matrix" data-role-req="CONTROL_ROOM" title="Triage Queue & Priority Matrix">
+                <i data-lucide="list-ordered"></i>
+                <span>TRIAGE</span>
+            </button>
+            <button class="nav-tab nav-role-control" data-tab="tab-sitrep" data-role-req="CONTROL_ROOM" title="SITREP & Emergency Broadcasts">
+                <i data-lucide="bar-chart-2"></i>
+                <span>SITREP</span>
+            </button>
+
+            <!-- Field Responder Tabs (FIELD_RESPONDER Role ONLY) -->
+            <button class="nav-tab nav-role-responder" data-tab="tab-responder" data-role-req="FIELD_RESPONDER" title="Tactical Mission Terminal" style="display: none;">
+                <i data-lucide="shield-alert"></i>
+                <span>TACTICAL</span>
+            </button>
+            <button class="nav-tab nav-role-responder" data-tab="tab-casualty" data-role-req="FIELD_RESPONDER" title="On-Site Casualty Logger" style="display: none;">
+                <i data-lucide="heart-pulse"></i>
+                <span>CASUALTY</span>
+            </button>
+            <button class="nav-tab nav-role-responder" data-tab="tab-sitrep" data-role-req="FIELD_RESPONDER" title="Field Situation Reporter" style="display: none;">
+                <i data-lucide="file-text"></i>
+                <span>REPORTER</span>
+            </button>
+        </nav>
+
+        <!-- Content Area -->
+        <div class="content-area">
+
+            <!-- TAB 1: TACTICAL MAP -->
+            <div id="tab-map" class="tab-pane active">
+                <div class="map-view-container">
+                    
+                    <!-- Floating Filter Controls -->
+                    <div class="map-overlay-controls">
+                        <div class="map-control-title"><i data-lucide="layers" style="width: 14px; display: inline-block; vertical-align: middle;"></i> Map Layers & Filters</div>
+                        <select id="map-filter-type" class="filter-select">
+                            <option value="ALL">All Disaster Types</option>
+                            <option value="FIRE">Fire & Blaze</option>
+                            <option value="FLOOD">Floods & Waterlogging</option>
+                            <option value="INDUSTRIAL">Industrial & Hazmat Gas</option>
+                            <option value="STRUCTURAL_COLLAPSE">Structural Collapse</option>
+                            <option value="CYCLONE">Cyclone & High Winds</option>
+                            <option value="EARTHQUAKE">Earthquake / Tremors</option>
+                        </select>
+                    </div>
+
+                    <!-- Leaflet Container -->
+                    <div id="tactical-map"></div>
+
+                    <!-- Sleek Expandable Floating Sensor HUD Chip (Bottom-Left) -->
+                    <div id="map-sensor-floating-container" class="map-floating-sensor-wrap">
+                        <!-- Collapsed Toggle Chip -->
+                        <button id="btn-toggle-sensor-hud" class="sensor-hud-pill-btn" title="Click to view live weather & sensor telemetry across Tamil Nadu">
+                            <span class="status-dot" style="background: #10b981;"></span>
+                            <span>🛰️ TN SENSOR GRID</span>
+                            <span id="sensor-hud-summary-temp" class="sensor-chip-temp">30.8°C</span>
+                            <i data-lucide="chevron-up" id="sensor-hud-arrow" style="width: 13px; height: 13px; transition: transform 0.2s;"></i>
+                        </button>
+
+                        <!-- Expandable HUD Drawer -->
+                        <div id="map-sensor-panel" class="sensor-hud-drawer" style="display: none;">
+                            <div class="sensor-hud-header">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span class="status-dot" style="background: #34d399; width: 7px; height: 7px;"></span>
+                                    <strong style="color: #34d399; font-size: 0.78rem; letter-spacing: 0.5px;">TAMIL NADU SENSOR TELEMETRY</strong>
+                                </div>
+                                <span id="sensor-hud-live-tag" style="font-size: 0.68rem; color: #94a3b8; font-family: var(--font-mono);">8 STATIONS ACTIVE</span>
+                            </div>
+
+                            <div id="tn-telemetry-nodes" class="sensor-nodes-grid">
+                                <div class="sensor-node-card">
+                                    <span class="node-city">📍 Chennai</span>
+                                    <strong class="node-val" id="tel-chennai">30.8°C | 0.0mm</strong>
+                                </div>
+                                <div class="sensor-node-card">
+                                    <span class="node-city">📍 Coimbatore</span>
+                                    <strong class="node-val" id="tel-coimbatore">28.4°C | 0.0mm</strong>
+                                </div>
+                                <div class="sensor-node-card">
+                                    <span class="node-city">📍 Madurai</span>
+                                    <strong class="node-val" id="tel-madurai">31.6°C | 0.0mm</strong>
+                                </div>
+                                <div class="sensor-node-card">
+                                    <span class="node-city">📍 Trichy</span>
+                                    <strong class="node-val" id="tel-trichy">30.9°C | 0.0mm</strong>
+                                </div>
+                                <div class="sensor-node-card">
+                                    <span class="node-city">📍 Sriperumbudur</span>
+                                    <strong class="node-val" id="tel-sriperumbudur">29.8°C | 0.0mm</strong>
+                                </div>
+                            </div>
+
+                            <div class="sensor-hud-actions">
+                                <button id="btn-sync-tn-realtime" class="btn btn-sm btn-hud-sync" title="Collect and ingest real-time weather & sensor alerts">
+                                    <i data-lucide="satellite" style="width: 12px; height: 12px;"></i> Sync Real-Time TN Telemetry
+                                </button>
+                                <button id="btn-reset-tn-db" class="btn btn-sm btn-hud-align" title="Align database with 4 Chennai + 4 Tamil Nadu tasks">
+                                    <i data-lucide="rotate-ccw" style="width: 12px; height: 12px;"></i> Align TN Tasks (4+4)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Floating Glass Incident Details Drawer -->
+                    <div id="map-incident-drawer" class="map-drawer" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- TAB 2: AI INGESTION WORKBENCH -->
+            <div id="tab-ingest" class="tab-pane">
+                <div class="ingest-view">
+                
+                    <!-- Dual-Window Layout State Toolbar -->
+                    <div class="ingest-toolbar">
+                        <div class="ingest-toolbar-title">
+                            <i data-lucide="layout-grid" style="width: 16px; height: 16px;"></i>
+                            <span>AI Triage Multi-Pane Workspace</span>
+                        </div>
+                        <div class="layout-btn-group">
+                            <button type="button" class="layout-mode-btn active" id="btn-layout-split" title="Dual Split 50/50 View" onclick="window.cadApp.setSplitWidth(50)">
+                                <i data-lucide="columns-2"></i> Dual Split
+                            </button>
+                            <button type="button" class="layout-mode-btn" id="btn-layout-left-max" title="Focus Ingestion Input (80%)" onclick="window.cadApp.setSplitWidth(80)">
+                                <i data-lucide="panel-left-open"></i> Focus Input
+                            </button>
+                            <button type="button" class="layout-mode-btn" id="btn-layout-right-max" title="Focus Schema Parser Output (20%)" onclick="window.cadApp.setSplitWidth(20)">
+                                <i data-lucide="panel-right-open"></i> Focus Output
+                            </button>
+                            <button type="button" class="layout-mode-btn" id="btn-layout-reset" title="Reset All Windows" onclick="window.cadApp.resetIngestLayout()">
+                                <i data-lucide="rotate-ccw"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Top Dual Split Workspace with Live Draggable Divider -->
+                    <div id="split-workspace-container" class="split-pane-wrapper">
+                        
+                        <!-- Left Panel: Ingestion Input Panel -->
+                        <div id="split-pane-left" class="split-pane-side" style="width: 50%;">
+                            <div class="panel-card collapsible-card" id="panel-ingest-input">
+                                <div class="panel-title panel-header-actions">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="satellite" style="color: #3b82f6;"></i>
+                                        <span>Distress Ingestion & AI Triage Workbench</span>
+                                    </div>
+                                    <div class="window-controls">
+                                        <button type="button" class="win-btn win-btn-minimize" id="btn-min-input" title="Minimize Window" onclick="window.cadApp.toggleMinimize('panel-ingest-input')">
+                                            <i data-lucide="minus"></i>
+                                        </button>
+                                        <button type="button" class="win-btn win-btn-focus" id="btn-focus-input" title="Maximize Pane / Full Width" onclick="window.cadApp.toggleIngestPaneFocus('panel-ingest-input')">
+                                            <i data-lucide="maximize-2"></i>
+                                        </button>
+                                        <button type="button" class="win-btn win-btn-collapse" id="btn-collapse-input" title="Collapse / Expand Window" onclick="window.cadApp.togglePanelCollapse('panel-ingest-input')">
+                                            <i data-lucide="chevron-up"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="panel-body-collapsible">
+                                    <div>
+                                        <div class="form-label" style="margin-bottom: 6px;">Preset Multi-Channel Scenarios:</div>
+                                        <div class="scenario-chips">
+                                            <span class="chip scenario-chip" 
+                                                data-msg="URGENT SOS! Water level has reached 2nd floor in Velachery Lake View Sector 4. Around 14 people including 4 elderly and babies trapped without food or power. Immediate boat rescue needed! @NDRFHQ"
+                                                data-meta="Velachery Lake View Sector 4, Chennai (12.9791, 80.2185)">
+                                                🌊 Velachery Flood (Trapped Families)
+                                            </span>
+                                            <span class="chip scenario-chip" 
+                                                data-msg="[CALLER 112 DISPATCH]: Major chemical gas leak at Manali Petrochem Industrial zone gate 3! Pungent ammonia smell everywhere, workers collapsing and choking, at least 8 people unconscious. Need Hazmat unit and ALS ambulances immediately!"
+                                                data-meta="Manali Industrial Zone, Gate 3 (13.1673, 80.2644)">
+                                                ☣️ Manali Ammonia Gas Leak
+                                            </span>
+                                            <span class="chip scenario-chip" 
+                                                data-msg="Severe 4-alarm fire raging inside commercial multi-story complex on Mount Road near Guindy Flyover. Thick black smoke engulfing 3rd and 4th floors. 22 workers trapped near fire exits! Send heavy fire tender now!"
+                                                data-meta="Mount Road near Guindy Flyover (13.0067, 80.2024)">
+                                                🔥 Commercial High-Rise Fire
+                                            </span>
+                                            <span class="chip scenario-chip" 
+                                                data-msg="Metro bridge girder collapsed onto 2 passenger buses at Anna Nagar West junction! Debris pinning vehicles, heavy screaming, minimum 15 passengers trapped. Critical extrication equipment required ASAP."
+                                                data-meta="Anna Nagar West Junction (13.0850, 80.2101)">
+                                                🏚️ Metro Bridge Collapse
+                                            </span>
+                                            <span class="chip scenario-chip" 
+                                                data-msg="CRITICAL ALARM! Multi-vehicle pileup and petrol tanker fire on Chennai Bypass Porur Toll corridor! Giant fireball engulfing toll lanes, 8 vehicles burning, multiple motorists trapped inside."
+                                                data-meta="Porur Toll Gate, Chennai Bypass (13.0382, 80.1565)">
+                                                ⛽ Porur Highway Tanker Explosion
+                                            </span>
+                                            <span class="chip scenario-chip" 
+                                                data-msg="Subsea crude oil and naphtha pipeline rupture near Ennore Port pier 4! Flammable vapor cloud expanding across coastline, 5 dockworkers overcome by hydrocarbon fumes."
+                                                data-meta="Ennore Port Pier 4 (13.2084, 80.3255)">
+                                                🛢️ Ennore Port Pipeline Rupture
+                                            </span>
+                                            <span class="chip scenario-chip" 
+                                                data-msg="Heartbreaking images coming in from coastal areas. Praying for everyone's safety and well-being. Stay strong guys! #PrayForChennai"
+                                                data-meta="Twitter Web Client">
+                                                🚫 Negative Test (Spam/Commentary)
+                                            </span>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Raw Distress Message / Transcript:</label>
+                                        <textarea id="input-raw-msg" class="form-textarea" placeholder="Paste crowdsourced text, WhatsApp alert, or 911/112 transcript here..."></textarea>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Sender Metadata / Location Hint (Optional):</label>
+                                        <input id="input-metadata" class="form-input" placeholder="e.g. Sector 4, Velachery / GPS 12.979, 80.218 / Twitter Feed" />
+                                    </div>
+
+                                    <button id="btn-run-triage" class="btn btn-primary" style="justify-content: center; padding: 10px;">
+                                        <i data-lucide="zap"></i> Run AI Triage Engine
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Draggable Resizer Bar -->
+                        <div id="split-divider-main" class="split-divider" title="Drag to resize workspace split-panes">
+                            <div class="split-divider-handle"></div>
+                        </div>
+
+                        <!-- Right Panel: AI Parser Output Inspector -->
+                        <div id="split-pane-right" class="split-pane-side" style="width: 50%;">
+                            <div class="panel-card collapsible-card" id="panel-ingest-output">
+                                <div class="panel-title panel-header-actions">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="terminal" style="color: #10b981;"></i>
+                                        <span>CAD Schema Parser Output</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div id="triage-result-pill"></div>
+                                        <div class="window-controls">
+                                            <button type="button" class="win-btn win-btn-minimize" id="btn-min-output" title="Minimize Window" onclick="window.cadApp.toggleMinimize('panel-ingest-output')">
+                                                <i data-lucide="minus"></i>
+                                            </button>
+                                            <button type="button" class="win-btn win-btn-focus" id="btn-focus-output" title="Maximize Pane / Full Width" onclick="window.cadApp.toggleIngestPaneFocus('panel-ingest-output')">
+                                                <i data-lucide="maximize-2"></i>
+                                            </button>
+                                            <button type="button" class="win-btn win-btn-collapse" id="btn-collapse-output" title="Collapse / Expand Window" onclick="window.cadApp.togglePanelCollapse('panel-ingest-output')">
+                                                <i data-lucide="chevron-up"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="panel-body-collapsible">
+                                    <div class="form-label">Strict JSON Output (CAD Standard Data Model):</div>
+                                    <div id="triage-output-json" class="json-box">
+// Run AI Triage or choose a scenario above to inspect structured CAD JSON telemetry...
+{
+  "status": "IDLE",
+  "engine": "GEMINI_2.5_FLASH + DETERMINISTIC_CAD_PARSER",
+  "ready": true
+}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Multimodal Vision Damage Assessment Workbench -->
+                    <div class="panel-card collapsible-card" id="panel-vision-workbench" style="margin-top: 18px; border: 1px solid rgba(56, 189, 248, 0.4); background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(10,14,23,0.95));">
+                        <div class="panel-title panel-header-actions">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="camera" style="color: #38bdf8; width: 20px;"></i>
+                                <span style="color: #fff; font-weight: 800;">Multimodal Disaster Vision & Damage Assessment Engine</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="badge" style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8;">
+                                    GEMINI 2.5 FLASH VISION
+                                </span>
+                                <div class="window-controls">
+                                    <button type="button" class="win-btn win-btn-collapse" id="btn-collapse-vision" title="Collapse / Expand Window" onclick="window.cadApp.togglePanelCollapse('panel-vision-workbench')">
+                                        <i data-lucide="chevron-up"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel-body-collapsible">
+                            <div id="split-vision-container" class="split-pane-wrapper" style="margin-top: 12px;">
+                                
+                                <!-- Left: Upload & Presets -->
+                                <div id="split-vision-left" class="split-pane-side" style="width: 50%; padding-right: 8px;">
+                                    <div class="form-label">Upload Disaster Photo / Drone Aerial Recon:</div>
+                                    
+                                    <div id="image-dropzone" class="image-upload-zone" style="border: 2px dashed rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 20px; text-align: center; background: rgba(15,23,42,0.6); cursor: pointer; transition: all 0.2s ease;">
+                                        <input type="file" id="input-disaster-image" accept="image/*" style="display: none;" />
+                                        <div id="dropzone-prompt">
+                                            <i data-lucide="upload-cloud" style="width: 36px; height: 36px; color: #38bdf8; margin-bottom: 8px;"></i>
+                                            <div style="font-size: 0.85rem; font-weight: 700; color: #e2e8f0;">Drag & Drop Disaster Photo or <span style="color: #38bdf8; text-decoration: underline;">Browse</span></div>
+                                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Supports PNG, JPG, WebP, Drone Aerial Imagery (Max 10MB)</div>
+                                        </div>
+                                        <div id="dropzone-preview-wrap" style="display: none; position: relative;">
+                                            <img id="image-preview" src="" alt="Disaster Evidence Preview" style="max-height: 180px; max-width: 100%; border-radius: 6px; object-fit: cover; border: 1px solid #38bdf8;" />
+                                            <button id="btn-remove-image" type="button" class="btn btn-secondary" style="position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 0.7rem; background: rgba(0,0,0,0.8);">✕ Remove</button>
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-top: 10px;">
+                                        <div class="form-label">Or Test with Synthetic Disaster Evidence Presets:</div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                            <button type="button" class="chip image-preset-btn" data-type="FLOOD" data-caption="Severe floodwaters inundating residential sector, 4 vehicles submerged at Velachery Main Road.">
+                                                🌊 Flood Inundation
+                                            </button>
+                                            <button type="button" class="chip image-preset-btn" data-type="FIRE" data-caption="Active structural blaze consuming commercial warehouse with dense smoke plume at Guindy Industrial Estate.">
+                                                🔥 Industrial Fire
+                                            </button>
+                                            <button type="button" class="chip image-preset-btn" data-type="STRUCTURAL_COLLAPSE" data-caption="Concrete bridge slab collapsed onto roadway with vehicles crushed beneath debris at Anna Nagar junction.">
+                                                🏗️ Structural Collapse
+                                            </button>
+                                            <button type="button" class="chip image-preset-btn" data-type="NON_DISASTER" data-caption="Sunny afternoon peaceful street view with normal pedestrian traffic and clear roads.">
+                                                🚫 Normal Scene (Negative)
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group" style="margin-top: 10px;">
+                                        <label class="form-label">Photo Context / Distress Caption (Optional):</label>
+                                        <input id="input-image-caption" class="form-input" placeholder="e.g. Roof-level inundation, 5 people stranded on terrace..." />
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Location / Landmark (Optional):</label>
+                                        <input id="input-image-location" class="form-input" placeholder="e.g. Velachery Lake Environs / Guindy Sector 3" />
+                                    </div>
+
+                                    <button id="btn-analyze-image" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 10px; background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #38bdf8; font-weight: 700;">
+                                        <i data-lucide="scan-eye"></i> Analyze Visual Damage & Ingest to CAD
+                                    </button>
+                                </div>
+
+                                <!-- Vision Live Draggable Resizer Bar -->
+                                <div id="split-divider-vision" class="split-divider" title="Drag to resize vision split-panes">
+                                    <div class="split-divider-handle"></div>
+                                </div>
+
+                                <!-- Right: Visual Assessment Intelligence Report -->
+                                <div id="split-vision-right" class="split-pane-side" style="width: 50%; padding-left: 8px;">
+                                    <div style="background: rgba(10,14,23,0.8); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; height: 100%; display: flex; flex-direction: column; box-sizing: border-box;">
+                                        <div style="font-size: 0.85rem; font-weight: 800; color: #fff; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>VISUAL DAMAGE INTELLIGENCE REPORT</span>
+                                            <span id="vision-status-tag" class="badge badge-low">STANDBY</span>
+                                        </div>
+
+                                        <div id="vision-report-body" style="flex: 1; padding: 12px 0; display: flex; flex-direction: column; justify-content: center; text-align: center; color: var(--text-muted);">
+                                            <i data-lucide="image" style="width: 42px; height: 42px; margin: 0 auto 8px auto; opacity: 0.4;"></i>
+                                            <div style="font-size: 0.85rem;">Upload an image or pick a preset to run multimodal damage assessment.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: CAD TRIAGE MATRIX / 3-STAGE OPERATIONAL BOARD -->
+        <div id="tab-matrix" class="tab-pane">
+            <div class="matrix-view">
+
+                    
+                    <!-- 3-Stage Operational Board Tabs -->
+                    <div class="triage-stage-nav">
+                        <button id="btn-stage-proposed" class="stage-tab-btn active" data-stage="PROPOSED">
+                            <span class="stage-icon">📥</span>
+                            <span class="stage-title">PROPOSED</span>
+                            <span class="stage-subtitle">Pending Dispatch</span>
+                            <span id="badge-stage-proposed" class="stage-count-badge">0</span>
+                        </button>
+                        <button id="btn-stage-ongoing" class="stage-tab-btn" data-stage="ONGOING">
+                            <span class="stage-icon">⚡</span>
+                            <span class="stage-title">ONGOING</span>
+                            <span class="stage-subtitle">Active Operations</span>
+                            <span id="badge-stage-ongoing" class="stage-count-badge">0</span>
+                        </button>
+                        <button id="btn-stage-completed" class="stage-tab-btn" data-stage="COMPLETED">
+                            <span class="stage-icon">✅</span>
+                            <span class="stage-title">COMPLETED</span>
+                            <span class="stage-subtitle">Resolved Archive</span>
+                            <span id="badge-stage-completed" class="stage-count-badge">0</span>
+                        </button>
+                    </div>
+
+                    <!-- Triage Queue Sort Controls -->
+                    <div class="matrix-sort-bar">
+                        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="arrow-down-up" style="width: 16px;"></i>
+                            <span>Queue Sorting:</span>
+                        </div>
+                        <div class="sort-segmented-control">
+                            <button id="btn-sort-priority" class="sort-toggle-btn active" data-sort="PRIORITY">
+                                🚨 Priority Damage Triage
+                            </button>
+                            <button id="btn-sort-chronological" class="sort-toggle-btn" data-sort="CHRONOLOGICAL">
+                                ⏱️ Timeline Ordering (Chronological)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="matrix-filters">
+                        <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">
+                            <i data-lucide="filter" style="width: 16px; display: inline-block; vertical-align: middle;"></i> Filters:
+                        </div>
+                        <input id="matrix-search" class="form-input" style="flex: 1; min-width: 240px;" placeholder="🔍 Search by Incident ID (INC-xxx), sector landmark, victim name..." />
+                        <select id="matrix-filter-severity" class="filter-select">
+                            <option value="ALL">All Severities</option>
+                            <option value="CRITICAL">Critical (80-100)</option>
+                            <option value="HIGH">High (60-79)</option>
+                            <option value="MODERATE">Moderate (40-59)</option>
+                            <option value="LOW">Low (0-39)</option>
+                        </select>
+                        <select id="matrix-filter-type" class="filter-select">
+                            <option value="ALL">All Types</option>
+                            <option value="FIRE">Fire</option>
+                            <option value="FLOOD">Flood</option>
+                            <option value="INDUSTRIAL">Industrial</option>
+                            <option value="STRUCTURAL_COLLAPSE">Collapse</option>
+                            <option value="CYCLONE">Cyclone</option>
+                            <option value="EARTHQUAKE">Earthquake</option>
+                        </select>
+                    </div>
+
+                    <div id="matrix-grid-container" class="matrix-grid"></div>
+
+                </div>
+            </div>
+
+            <!-- TAB 4: SITUATION ROOM (SITREP) -->
+            <div id="tab-sitrep" class="tab-pane">
+                <div class="sitrep-view">
+                    
+                    <!-- KPI Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-label">Total Ingested Incidents</span>
+                            <span id="sit-stat-total" class="stat-val" style="color: #60a5fa;">0</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Active Critical Threats</span>
+                            <span id="sit-stat-critical" class="stat-val" style="color: #f87171;">0</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Trapped Citizens at Risk</span>
+                            <span id="sit-stat-trapped" class="stat-val" style="color: #fb923c;">0</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Mean Urgency Index</span>
+                            <span id="sit-stat-urgency" class="stat-val" style="color: #34d399;">0 / 100</span>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="charts-grid">
+                        <div class="panel-card">
+                            <div class="panel-title"><i data-lucide="bar-chart-3"></i> Incidents by Disaster Type</div>
+                            <div style="height: 220px;">
+                                <canvas id="chart-disaster-types"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="panel-card">
+                            <div class="panel-title"><i data-lucide="pie-chart"></i> Severity Breakdown</div>
+                            <div style="height: 220px;">
+                                <canvas id="chart-severity"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Situation Report Preview & Export -->
+                    <div class="panel-card">
+                        <div class="panel-title" style="justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="file-text" style="color: #f59e0b;"></i>
+                                <span>Official SDMA / NDRF Situation Report (SITREP)</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="btn-copy-sitrep" class="btn btn-secondary">
+                                    <i data-lucide="copy"></i> Copy SITREP (MD)
+                                </button>
+                                <button id="btn-download-sitrep" class="btn btn-primary">
+                                    <i data-lucide="download"></i> Download Report
+                                </button>
+                            </div>
+                        </div>
+                        <pre id="sitrep-preview-text" class="json-box" style="color: #e2e8f0; max-height: 260px;">Loading SITREP...</pre>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- TAB 5: FIELD RESPONDER TACTICAL TERMINAL -->
+            <div id="tab-responder" class="tab-pane">
+                <div class="responder-view">
+                    
+                    <!-- Unit Header -->
+                    <div class="responder-unit-header">
+                        <div class="responder-profile-group">
+                            <div class="responder-avatar">
+                                <i data-lucide="shield-check" style="width: 24px; height: 24px; color: #fff;"></i>
+                            </div>
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <h2 id="resp-unit-name" style="font-size: 1.15rem; font-weight: 800; letter-spacing: 0.5px;">Capt. Marcus Vance</h2>
+                                    <span class="badge badge-callsign" id="resp-callsign-badge">COMMAND-ALPHA</span>
+                                    <span class="badge badge-badge-id" id="resp-badge-id">BADGE #9942-ALPHA</span>
+                                    <span class="badge badge-team" id="resp-team-badge">🚒 Heavy Rescue Taskforce 1</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 12px; font-family: var(--font-mono);">
+                                    <span>📍 Sector: <strong id="resp-sector-name" style="color: #60a5fa;">Sector 4 - Velachery Urban Corridor</strong></span>
+                                    <span>📡 Telemetry: <strong style="color: #34d399;">ONLINE • GPS LOCK (12.9791, 80.2185)</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Unit Switcher -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Switch Unit:</label>
+                            <select id="select-responder-unit" class="filter-select" style="min-width: 200px;">
+                                <option value="COMMAND-ALPHA">COMMAND-ALPHA (Tactical HQ)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tactical Workspace Layout -->
+                    <div class="responder-grid">
+                        
+                        <!-- Left Column: Active Mission & 6-State Tactical Bar -->
+                        <div class="responder-col">
+                            
+                            <!-- Active Mission Card -->
+                            <div class="panel-card mission-card">
+                                <div class="panel-title" style="justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="target" style="color: #ef4444;"></i>
+                                        <span>Assigned Team Mission</span>
+                                    </div>
+                                    <div id="resp-mission-sev-badge">
+                                        <span class="badge badge-critical">CRITICAL</span>
+                                    </div>
+                                </div>
+
+                                <div id="resp-mission-content">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);" id="resp-mission-id">INC-AUTO-ASSIGNED</div>
+                                    <h3 id="resp-mission-title" style="font-size: 1.15rem; font-weight: 800; margin: 4px 0 8px 0; line-height: 1.3;">
+                                        Major Disaster Scenario
+                                    </h3>
+                                    
+                                    <div class="mission-meta-grid">
+                                        <div class="mission-meta-item">
+                                            <div class="meta-label"><i data-lucide="map-pin" style="width: 14px;"></i> Location & Coordinates</div>
+                                            <div id="resp-mission-location" class="meta-val">Velachery Lake View, Sector 4</div>
+                                        </div>
+                                        <div class="mission-meta-item">
+                                            <div class="meta-label"><i data-lucide="activity" style="width: 14px;"></i> Urgency Index</div>
+                                            <div id="resp-mission-urgency" class="meta-val" style="color: #ef4444;">92 / 100</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Access Routes -->
+                                    <div class="tactical-directive-box routes">
+                                        <div class="directive-label"><i data-lucide="navigation" style="width: 14px;"></i> Ingress Corridors & Navigational Routes</div>
+                                        <p id="resp-mission-routes" class="directive-text">Primary evacuation corridor cleared. Heavy vehicle access via Inner Ring Road / Guindy Arterial Link.</p>
+                                    </div>
+
+                                    <!-- Emergency Instructions -->
+                                    <div class="tactical-directive-box instructions">
+                                        <div class="directive-label"><i data-lucide="shield-alert" style="width: 14px;"></i> Emergency Tactical Directives</div>
+                                        <p id="resp-mission-instructions" class="directive-text">Deploy inflatable boats and ALS triage squad. Establish 200m staging perimeter at safe elevation.</p>
+                                    </div>
+
+                                    <!-- Safety Protocols & Blockage Warnings -->
+                                    <div class="tactical-directive-box blockages">
+                                        <div class="directive-label"><i data-lucide="alert-octagon" style="width: 14px;"></i> Emergency Safety Protocols & Route Blockages</div>
+                                        <p id="resp-mission-blockages" class="directive-text">
+                                            🚧 <strong>ROUTE WARNING:</strong> Medavakkam Main Rd submerged (1.2m depth). Heavy apparatus reroute via 200 Feet Radial Link.<br>
+                                            ⚠️ <strong>SAFETY PROTOCOL:</strong> SCBA required within 150m cordon. Live secondary structural collapse hazard.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- 6-State Tactical Status Bar -->
+                                <div>
+                                    <div class="form-label" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                        <i data-lucide="sliders" style="width: 14px; display: inline-block; vertical-align: middle;"></i> 6-State Tactical Status Mobilization:
+                                    </div>
+                                    <div class="tactical-status-bar">
+                                        <button class="tactical-btn" data-status="ACCEPTED" id="t-btn-accepted">
+                                            <span class="btn-indicator"></span>
+                                            <span>ACCEPTED</span>
+                                        </button>
+                                        <button class="tactical-btn" data-status="EN_ROUTE" id="t-btn-enroute">
+                                            <span class="btn-indicator"></span>
+                                            <span>EN_ROUTE</span>
+                                        </button>
+                                        <button class="tactical-btn active" data-status="ON_SCENE" id="t-btn-onscene">
+                                            <span class="btn-indicator"></span>
+                                            <span>ON_SCENE</span>
+                                        </button>
+                                        <button class="tactical-btn btn-danger-tactical" data-status="ASSISTANCE_REQUIRED" id="t-btn-assist">
+                                            <span class="btn-indicator"></span>
+                                            <span>ASSISTANCE REQ</span>
+                                        </button>
+                                        <button class="tactical-btn btn-control-tactical" data-status="SITUATION_UNDER_CONTROL" id="t-btn-control">
+                                            <span class="btn-indicator"></span>
+                                            <span>UNDER CONTROL</span>
+                                        </button>
+                                        <button class="tactical-btn btn-success-tactical" data-status="RESOLVED" id="t-btn-resolved">
+                                            <span class="btn-indicator"></span>
+                                            <span>RESOLVED</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Right Column: Casualty & Victim Triage Logger -->
+                        <div class="responder-col">
+                            
+                            <div class="panel-card">
+                                <div class="panel-title">
+                                    <i data-lucide="heart-pulse" style="color: #ec4899;"></i>
+                                    <span>Casualty & Victim Triage Logger</span>
+                                </div>
+
+                                <div class="victim-form">
+                                    <div class="form-group">
+                                        <label class="form-label">Victim Identification / Identifier:</label>
+                                        <input id="input-victim-name" class="form-input" placeholder="e.g. Female (approx 35 yrs) / Ramesh K." />
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">START Triage Category:</label>
+                                        <div class="triage-category-selector">
+                                            <label class="cat-chip red active" data-cat="RED">
+                                                <input type="radio" name="triage-cat" value="RED" checked style="display: none;">
+                                                <span>🔴 RED (Immediate)</span>
+                                            </label>
+                                            <label class="cat-chip yellow" data-cat="YELLOW">
+                                                <input type="radio" name="triage-cat" value="YELLOW" style="display: none;">
+                                                <span>🟡 YELLOW (Delayed)</span>
+                                            </label>
+                                            <label class="cat-chip green" data-cat="GREEN">
+                                                <input type="radio" name="triage-cat" value="GREEN" style="display: none;">
+                                                <span>🟢 GREEN (Minor)</span>
+                                            </label>
+                                            <label class="cat-chip black" data-cat="BLACK">
+                                                <input type="radio" name="triage-cat" value="BLACK" style="display: none;">
+                                                <span>⚫ BLACK (Deceased)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Injury Observations / Medical Notes:</label>
+                                        <input id="input-victim-notes" class="form-input" placeholder="e.g. Second degree burns, smoke inhalation, stabilized on O2." />
+                                    </div>
+
+                                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="check-victim-rescued" style="width: 18px; height: 18px; accent-color: #3b82f6;" />
+                                        <label for="check-victim-rescued" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer;">
+                                            Extricated & Evacuated to Staging / Hospital
+                                        </label>
+                                    </div>
+
+                                    <button id="btn-submit-victim" class="btn btn-primary" style="justify-content: center; padding: 10px;">
+                                        <i data-lucide="user-plus"></i> Submit Victim Profile to CAD
+                                    </button>
+                                </div>
+
+                                <!-- Live Victim Log List -->
+                                <div style="margin-top: 10px;">
+                                    <div class="form-label" style="margin-bottom: 6px;">Logged Scene Casualties:</div>
+                                    <div id="responder-victim-list" class="logged-victim-list">
+                                        <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 16px;">
+                                            No victim profiles logged for this mission yet.
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- TAB 6: ON-SITE CASUALTY LOGGER (STANDALONE TAB) -->
+            <div id="tab-casualty" class="tab-pane">
+                <div class="responder-view">
+                    <div class="panel-card">
+                        <div class="panel-title">
+                            <i data-lucide="heart-pulse" style="color: #ec4899;"></i>
+                            <span>Field Responder Medical & Casualty Management Suite</span>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                            Rapid on-scene mass-casualty triage management following the Simple Triage and Rapid Treatment (START) protocol.
+                        </p>
+                        <div class="responder-grid">
+                            <div class="responder-col">
+                                <div class="victim-form">
+                                    <div class="form-group">
+                                        <label class="form-label">Victim Identification / Identifier:</label>
+                                        <input id="input-victim-name-alt" class="form-input" placeholder="e.g. Adult Male (approx 45 yrs) / S. Suresh" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">START Triage Category:</label>
+                                        <div class="triage-category-selector">
+                                            <label class="cat-chip red active" data-cat="RED">
+                                                <span>🔴 RED (Immediate)</span>
+                                            </label>
+                                            <label class="cat-chip yellow" data-cat="YELLOW">
+                                                <span>🟡 YELLOW (Delayed)</span>
+                                            </label>
+                                            <label class="cat-chip green" data-cat="GREEN">
+                                                <span>🟢 GREEN (Minor)</span>
+                                            </label>
+                                            <label class="cat-chip black" data-cat="BLACK">
+                                                <span>⚫ BLACK (Deceased)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Injury Observations / Medical Notes:</label>
+                                        <input id="input-victim-notes-alt" class="form-input" placeholder="e.g. Compound fracture, tourniquet applied, BP stable." />
+                                    </div>
+                                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="check-victim-rescued-alt" style="width: 18px; height: 18px; accent-color: #3b82f6;" />
+                                        <label for="check-victim-rescued-alt" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer;">
+                                            Extricated & Evacuated to Staging / Hospital
+                                        </label>
+                                    </div>
+                                    <button id="btn-submit-victim-alt" class="btn btn-primary" style="justify-content: center; padding: 10px;">
+                                        <i data-lucide="user-plus"></i> Submit Victim Profile to CAD
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="responder-col">
+                                <div class="form-label" style="margin-bottom: 6px;">Logged Incident Casualties:</div>
+                                <div id="responder-victim-list-alt" class="logged-victim-list">
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 16px;">
+                                        No victim profiles logged yet.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal: Responder Unit Dispatch -->
+    <div id="modal-dispatch" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-dispatch-title" style="font-size: 1.05rem; font-weight: 700;">Dispatch First Responders</h3>
+                <button class="btn-icon modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">Select emergency response units to mobilize to scene:</div>
+                <div id="dispatch-unit-list" class="unit-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close">Cancel</button>
+                <button id="btn-commit-dispatch" class="btn btn-primary"><i data-lucide="send"></i> Mobilize Selected Units</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Step 10 Queue Safety Sweep Audit -->
+    <div id="modal-safety-sweep" class="modal-backdrop">
+        <div class="modal-content" style="max-width: 750px;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="shield-check" style="color: #fbbf24; width: 22px; height: 22px;"></i>
+                    <h3 style="font-size: 1.1rem; font-weight: 800;">Queue Safety Sweep Audit & Integrity Check</h3>
+                </div>
+                <button class="btn-icon modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <!-- Sweep KPI Audit Grid -->
+                <div class="safety-sweep-kpis">
+                    <div class="sweep-kpi-card">
+                        <span class="sweep-kpi-label">Active Incidents</span>
+                        <span id="sweep-total-active" class="sweep-kpi-val" style="color: #60a5fa;">0</span>
+                    </div>
+                    <div class="sweep-kpi-card">
+                        <span class="sweep-kpi-label">Unassigned Critical</span>
+                        <span id="sweep-unassigned-critical" class="sweep-kpi-val" style="color: #ef4444;">0</span>
+                    </div>
+                    <div class="sweep-kpi-card">
+                        <span class="sweep-kpi-label">Unrescued Casualties</span>
+                        <span id="sweep-unrescued-victims" class="sweep-kpi-val" style="color: #f59e0b;">0</span>
+                    </div>
+                    <div class="sweep-kpi-card">
+                        <span class="sweep-kpi-label">GPS & Timestamp Sync</span>
+                        <span id="sweep-gps-integrity" class="sweep-kpi-val" style="color: #10b981;">100%</span>
+                    </div>
+                </div>
+
+                <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin: 16px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Automated Queue Integrity Verification:
+                </div>
+                <div id="safety-sweep-incident-list" class="safety-sweep-list"></div>
+
+                <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin: 16px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Operational "Verify All Clear" Checklist:
+                </div>
+                <div class="sweep-checklist">
+                    <label class="sweep-check-item">
+                        <input type="checkbox" id="chk-sweep-1" checked />
+                        <span>100% of open emergency calls have valid GPS coordinates and timestamps</span>
+                    </label>
+                    <label class="sweep-check-item">
+                        <input type="checkbox" id="chk-sweep-2" checked />
+                        <span>All high/critical urgency rescue calls have active responder teams assigned</span>
+                    </label>
+                    <label class="sweep-check-item">
+                        <input type="checkbox" id="chk-sweep-3" checked />
+                        <span>All reported RED/YELLOW victims triaged with extrication protocols</span>
+                    </label>
+                    <label class="sweep-check-item">
+                        <input type="checkbox" id="chk-sweep-4" checked />
+                        <span>Ingress access routes and flood/hazard blockages verified with field units</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close">Close Audit</button>
+                <button id="btn-confirm-sweep-clearance" class="btn btn-primary" style="background: #10b981; border-color: #10b981;">
+                    <i data-lucide="check-circle-2"></i> Verify All Clear & Confirm Operational Clearance
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Step 12 System Standby & Session Concluded -->
+    <div id="modal-system-standby" class="modal-backdrop">
+        <div class="modal-content" style="max-width: 650px; text-align: center;">
+            <div class="standby-icon-wrap">
+                <i data-lucide="archive" style="width: 36px; height: 36px; color: #60a5fa;"></i>
+            </div>
+            <h2 style="font-size: 1.25rem; font-weight: 800; margin-top: 14px; color: #fff;">
+                SYSTEM STANDBY // MISSION CONCLUDED
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 8px auto 16px auto; max-width: 500px;">
+                Complete operational session log has been archived and downloaded as clean structured JSON. Live telemetry polling and feed simulations are safely placed on standby.
+            </p>
+            <div class="standby-stats-summary" id="standby-stats-box">
+                <div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase;">Incidents Logged</div>
+                    <div id="standby-stat-incidents" style="font-size: 1.2rem; font-weight: 800; color: #60a5fa;">0</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase;">Casualties Trapped/Injured</div>
+                    <div id="standby-stat-casualties" style="font-size: 1.2rem; font-weight: 800; color: #f59e0b;">0</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase;">Mobilized Units</div>
+                    <div id="standby-stat-units" style="font-size: 1.2rem; font-weight: 800; color: #10b981;">0</div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 12px; margin-top: 20px;">
+                <button id="btn-redownload-json" class="btn btn-secondary">
+                    <i data-lucide="download"></i> Re-download Session JSON
+                </button>
+                <button id="btn-resume-cad" class="btn btn-primary">
+                    <i data-lucide="play"></i> Resume Active CAD Operations
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Multimodal Image Zoom & Visual Evidence Viewer -->
+    <div id="modal-image-zoom" class="modal-backdrop">
+        <div class="modal-content" style="max-width: 820px; background: rgba(10, 15, 29, 0.96); border: 1px solid rgba(56, 189, 248, 0.4); box-shadow: 0 25px 60px rgba(0,0,0,0.9);">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="camera" style="color: #38bdf8; width: 20px; height: 20px;"></i>
+                    <h3 id="modal-zoom-title" style="font-size: 1.05rem; font-weight: 800; color: #fff;">Visual Disaster Evidence</h3>
+                </div>
+                <button class="btn-icon modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 16px 0;">
+                <div style="max-height: 60vh; overflow: hidden; border-radius: 10px; border: 1px solid var(--border-color); background: #000; display: flex; align-items: center; justify-content: center;">
+                    <img id="modal-zoom-img" src="" alt="Evidence Photo" style="max-width: 100%; max-height: 58vh; object-fit: contain;" />
+                </div>
+                <div id="modal-zoom-caption" style="margin-top: 12px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; text-align: left; padding: 0 8px;"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                <span id="modal-zoom-meta" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);"></span>
+                <button class="btn btn-secondary modal-close">Close Preview</button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal: After-Action Report (AAR) -->
+    <div id="modal-aar" class="modal-backdrop">
+        <div class="modal-content" style="max-width: 720px; max-height: 88vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="file-check" style="color: #10b981; width: 22px;"></i>
+                    <h3 id="modal-aar-title" style="font-size: 1.1rem; font-weight: 800; color: #fff;">AFTER-ACTION REPORT</h3>
+                </div>
+                <button class="btn btn-secondary modal-close" style="padding: 4px 8px; font-size: 0.8rem;">✕</button>
+            </div>
+            <div id="modal-aar-body" style="padding: 16px 0; overflow-y: auto; flex: 1;">
+                <!-- Dynamically populated by JS -->
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                <button id="btn-print-aar" class="btn btn-secondary">
+                    <i data-lucide="printer"></i> Print / Export AAR
+                </button>
+                <button class="btn btn-primary modal-close">
+                    <i data-lucide="check"></i> Close Report
+                </button>
+            </div>
+        </div>
+    <!-- LIVE SOCIAL INGESTION DRAWER -->
+    <div id="stream-drawer" class="social-stream-drawer fixed inset-y-0 right-0 w-[420px] max-w-[90vw] bg-slate-950/95 border-l border-slate-800 shadow-2xl z-[9999] flex flex-col transition-transform duration-300" style="display: none; backdrop-filter: blur(16px);">
+        <!-- Header -->
+        <div class="stream-drawer-header p-4 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="stream-pulse-dot active h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h3 class="font-mono text-sm font-bold text-slate-100 uppercase tracking-wider" style="margin: 0;">Live Social Crisis Ingestion Feed</h3>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="btn btn-secondary" id="btn-stream-toggle" onclick="window.cadApp.toggleStreamWorker()" title="Pause/Resume Ingestion" style="padding: 4px 8px; font-size: 0.72rem;">
+                    <i data-lucide="pause" style="width: 12px; height: 12px;"></i> <span id="btn-stream-toggle-label">Pause</span>
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="window.cadApp.simulateStreamPost()" title="Trigger Instant Simulated Social Crisis Post" style="padding: 4px 8px; font-size: 0.72rem; background: rgba(56, 189, 248, 0.15); border-color: #38bdf8; color: #38bdf8;">
+                    <i data-lucide="zap" style="width: 12px; height: 12px;"></i> Test Post
+                </button>
+                <button type="button" class="btn btn-icon" onclick="window.cadApp.clearStreamLog()" title="Clear Stream Log" style="padding: 4px;">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+                <button id="close-stream-drawer" type="button" onclick="window.cadApp.toggleSocialStreamDrawer(false)" class="text-slate-400 hover:text-white text-xl px-2 py-1 rounded hover:bg-slate-800 transition-colors cursor-pointer" title="Close Drawer">&times;</button>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="px-4 py-2 bg-slate-900/80 border-b border-slate-800 flex justify-between text-xs font-mono text-slate-400">
+            <span>Sources: X (Twitter), Reddit, 112 TN, Web</span>
+            <span class="text-emerald-400 font-semibold" style="display: flex; align-items: center; gap: 4px;">● INGESTING</span>
+        </div>
+
+        <!-- Stream Summary Metrics -->
+        <div class="stream-stats-bar">
+            <div class="stream-stat-chip">
+                <span>Ingested:</span> <strong id="stream-stat-ingested" style="color: #60a5fa;">0</strong>
+            </div>
+            <div class="stream-stat-chip">
+                <span>Tickets:</span> <strong id="stream-stat-tickets" style="color: #10b981;">0</strong>
+            </div>
+            <div class="stream-stat-chip">
+                <span>Merged:</span> <strong id="stream-stat-merged" style="color: #38bdf8;">0</strong>
+            </div>
+            <div class="stream-stat-chip">
+                <span>Filtered:</span> <strong id="stream-stat-discarded" style="color: #f87171;">0</strong>
+            </div>
+        </div>
+
+        <!-- Feed Items Container -->
+        <div id="stream-feed-list" class="stream-feed-list flex-1 overflow-y-auto p-4 space-y-3 font-mono">
+            <div class="stream-empty-state">
+                <i data-lucide="activity" style="width: 32px; height: 32px; opacity: 0.4; margin-bottom: 8px;"></i>
+                <div>Listening to continuous crisis stream across Tamil Nadu...</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Click "Test Post" to trigger an instant incoming distress signal.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Application Scripts -->
+    <script src="/static/js/audio.js?v=2.4.9"></script>
+    <script src="/static/js/map.js?v=2.4.9"></script>
+    <script src="/static/js/app.js?v=2.4.9"></script>
+</body>
+</html>
+
+
+
+
