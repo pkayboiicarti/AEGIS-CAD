@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing CAD Database and schema (Live Real-Time Mode)...")
     await init_db()
     social_worker.set_broadcast_callback(ws_manager.broadcast)
+    if not os.getenv("VERCEL"):
     social_worker.start(interval_seconds=30)
     yield
     # Shutdown
