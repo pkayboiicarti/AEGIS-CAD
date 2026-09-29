@@ -6,7 +6,10 @@ from typing import List, Optional, Dict, Any
 from app.models import IncidentRecord, EmergencyUnit, SystemStats, DisasterType, SeverityLevel, EmergencyStation, ResponseUnit
 
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "cad_disaster.db")
+if os.getenv("VERCEL"):
+    DB_PATH = "/tmp/cad_disaster.db"
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "..", "cad_disaster.db")
 
 DEFAULT_UNITS = [
     {
