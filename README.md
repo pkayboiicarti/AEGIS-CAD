@@ -1,4 +1,4 @@
-# 🚨 AEGIS-CAD // AI-Powered Disaster Ingestion & Triage Command Center
+# 🚨 AEGIS-CAD - AI-Powered Disaster Ingestion & Triage Command Center
 
 **AEGIS-CAD** is an emergency Computer-Aided Dispatch (CAD) and Disaster Distress Ingestion platform built for Smart India Hackathon (SIH), State Emergency Operations Centers (SEOC), and First Responders (NDRF, Fire & Rescue, SDRF, EMS, and Police).
 
